@@ -1,0 +1,178 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Soccer VS Angriff</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101827;color:white;font-family:Arial,sans-serif;text-align:center}
+header{padding:14px;background:#17243a}
+h1{margin:4px;color:#65f29a;font-size:27px}
+p{margin:7px}
+#score{font-size:21px;font-weight:bold;margin:12px}
+canvas{width:96%;max-width:850px;display:block;margin:auto;border:3px solid white;border-radius:10px;touch-action:none}
+button{border:0;border-radius:10px;padding:13px 17px;margin:5px;background:#65f29a;color:#102018;font-size:16px;font-weight:bold}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;margin:10px}
+.pad{display:grid;grid-template-columns:48px 48px 48px;gap:4px}
+.pad button{margin:0;padding:12px 0;background:#293c57;color:white}
+#message{min-height:24px;color:#ffe66d}
+</style>
+</head>
+<body>
+<header>
+<h1>⚽ SOCCER VS ANGRIFF</h1>
+<p>3 Angreifer gegen 3 Verteidiger</p>
+</header>
+<div id="score">Angriff 0 : 0 Abwehr</div>
+<p id="round">Angriff 1 von 12</p>
+<canvas id="game" width="800" height="470"></canvas>
+<p id="message">Drücke START, um zu spielen!</p>
+<button id="start">▶ START</button>
+<button id="shoot">⚽ SCHIESSEN</button>
+<div class="controls">
+<div class="pad">
+<span></span><button data-key="ArrowUp">▲</button><span></span>
+<button data-key="ArrowLeft">◀</button><button data-key="ArrowDown">▼</button><button data-key="ArrowRight">▶</button>
+</div>
+<div>
+<p>Bewege den aktiven Angreifer</p>
+<p>PC: Pfeiltasten + Leertaste</p>
+</div>
+</div>
+<script>
+const c=document.getElementById("game"),ctx=c.getContext("2d");
+const scoreEl=document.getElementById("score");
+const roundEl=document.getElementById("round");
+const msg=document.getElementById("message");
+const startBtn=document.getElementById("start");
+const shootBtn=document.getElementById("shoot");
+let attackers=[],defenders=[],ball={},round=1,attackScore=0;
+let defenseScore=0,running=false,finished=false,keys={};
+let shotCooldown=0,turnTimer=0,active=0;
+function reset(){
+attackers=[
+{x:180,y:145},{x:180,y:235},{x:180,y:325}
+];
+defenders=[
+{x:555,y:150},{x:590,y:235},{x:555,y:320}
+];
+ball={x:225,y:235,vx:0,vy:0};
+active=1;shotCooldown=0;turnTimer=0;
+}
+function drawPlayer(p,color,n){
+ctx.fillStyle="rgba(0,0,0,.22)";
+ctx.beginPath();ctx.ellipse(p.x,p.y+12,15,7,0,0,7);ctx.fill();
+ctx.fillStyle=color;
+ctx.beginPath();ctx.arc(p.x,p.y,15,0,Math.PI*2);ctx.fill();
+ctx.strokeStyle="white";ctx.lineWidth=2;ctx.stroke();
+ctx.fillStyle="white";ctx.font="bold 13px Arial";
+ctx.textAlign="center";ctx.textBaseline="middle";
+ctx.fillText(n,p.x,p.y);
+}
+function draw(){
+ctx.clearRect(0,0,800,470);
+let g=ctx.createLinearGradient(0,0,800,470);
+g.addColorStop(0,"#14803c");g.addColorStop(1,"#08602e");
+ctx.fillStyle=g;ctx.fillRect(0,0,800,470);
+for(let i=0;i<8;i++){
+ctx.fillStyle=i%2?"rgba(255,255,255,.035)":"rgba(0,0,0,.035)";
+ctx.fillRect(i*100,0,100,470);
+}
+ctx.strokeStyle="rgba(255,255,255,.8)";ctx.lineWidth=3;
+ctx.strokeRect(25,25,750,420);
+ctx.beginPath();ctx.moveTo(400,25);ctx.lineTo(400,445);ctx.stroke();
+ctx.beginPath();ctx.arc(400,235,65,0,Math.PI*2);ctx.stroke();
+ctx.strokeRect(25,145,110,180);ctx.strokeRect(665,145,110,180);
+ctx.strokeRect(25,190,45,90);ctx.strokeRect(730,190,45,90);
+ctx.fillStyle="#ddd";ctx.fillRect(0,185,25,100);ctx.fillRect(775,185,25,100);
+attackers.forEach((p,i)=>drawPlayer(p,i===active?"#ffe34f":"#168cff",i+1));
+defenders.forEach((p,i)=>drawPlayer(p,"#ef4444",i+1));
+ctx.fillStyle="white";ctx.beginPath();ctx.arc(ball.x,ball.y,9,0,Math.PI*2);ctx.fill();
+ctx.strokeStyle="#222";ctx.lineWidth=2;ctx.stroke();
+ctx.beginPath();ctx.moveTo(ball.x-5,ball.y-4);ctx.lineTo(ball.x+5,ball.y+4);
+ctx.moveTo(ball.x+5,ball.y-4);ctx.lineTo(ball.x-5,ball.y+4);ctx.stroke();
+}
+function updateScore(){
+scoreEl.textContent=`Angriff ${attackScore} : ${defenseScore} Abwehr`;
+roundEl.textContent=finished?"12 Angriffe beendet":`Angriff ${round} von 12`;
+}
+function nextTurn(goal){
+if(!running)return;
+if(goal){attackScore++;msg.textContent="TOOOR! +1 für den Angriff!";}
+else{defenseScore++;msg.textContent="Abgewehrt! +1 für die Abwehr!";}
+updateScore();round++;
+if(round>12){
+running=false;finished=true;
+msg.textContent=`Spielende! Ergebnis: Angriff ${attackScore} : ${defenseScore} Abwehr`;
+startBtn.textContent="↻ NOCHMAL SPIELEN";
+updateScore();return;
+}
+reset();
+}
+function shoot(){
+if(!running||shotCooldown>0)return;
+shotCooldown=30;
+ball.vx=7;ball.vy=(235-ball.y)*.035;
+msg.textContent="Schuss! Die Abwehr versucht zu blocken …";
+}
+function step(){
+if(running){
+let p=attackers[active],speed=3.3;
+if(keys.ArrowUp||keys.w)p.y-=speed;
+if(keys.ArrowDown||keys.s)p.y+=speed;
+if(keys.ArrowLeft||keys.a)p.x-=speed;
+if(keys.ArrowRight||keys.d)p.x+=speed;
+p.x=Math.max(45,Math.min(630,p.x));
+p.y=Math.max(45,Math.min(425,p.y));
+if(shotCooldown>0)shotCooldown--;
+ball.x+=ball.vx;ball.y+=ball.vy;
+ball.vx*=.985;ball.vy*=.985;
+defenders.forEach(d=>{
+let dx=ball.x-d.x,dy=ball.y-d.y,dist=Math.hypot(dx,dy);
+if(dist<27&&Math.abs(ball.vx)+Math.abs(ball.vy)>1){
+ball.vx=-Math.abs(ball.vx)*.5;
+ball.x=d.x-25;
+nextTurn(false);
+}
+});
+if(ball.x>790)nextTurn(true);
+else if(ball.x<10)nextTurn(false);
+else if(Math.abs(ball.vx)<.12&&shotCooldown===0&&ball.x>240){
+turnTimer++;
+if(turnTimer>180)nextTurn(false);
+}
+}
+draw();requestAnimationFrame(step);
+}
+startBtn.onclick=()=>{
+if(finished){round=1;attackScore=0;defenseScore=0;finished=false;}
+if(!running){reset();running=true;startBtn.textContent="Spiel läuft";msg.textContent="Steuere deinen Angreifer und schieße!";updateScore();}
+};
+shootBtn.onclick=shoot;
+document.addEventListener("keydown",e=>{
+keys[e.key]=true;
+if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key))e.preventDefault();
+if(e.key===" ")shoot();
+if(e.key==="Tab"){e.preventDefault();active=(active+1)%3;}
+});
+document.addEventListener("keyup",e=>keys[e.key]=false);
+document.querySelectorAll("[data-key]").forEach(b=>{
+const k=b.dataset.key;
+b.addEventListener("pointerdown",e=>{e.preventDefault();keys[k]=true;});
+["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,()=>keys[k]=false));
+});
+c.addEventListener("pointerdown",e=>{
+if(!running)return;
+const r=c.getBoundingClientRect();
+const x=(e.clientX-r.left)*800/r.width;
+const y=(e.clientY-r.top)*470/r.height;
+let nearest=0,dist=Infinity;
+attackers.forEach((p,i)=>{let d=Math.hypot(p.x-x,p.y-y);if(d<dist){dist=d;nearest=i;}});
+active=nearest;
+});
+reset();updateScore();step();
+</script>
+</body>
+</html>
